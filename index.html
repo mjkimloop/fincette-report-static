@@ -1,3 +1,337 @@
 <!DOCTYPE html>
-<!-- 생략: 전체 HTML 코드가 여기에 삽입되어야 함 -->
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>핀셋리포트 - 상세 대출 설계안</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- html2pdf.js 라이브러리 추가 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    
+    <!-- [업데이트] GA, 추적 태그 등 분석 스크립트 추가 위치 -->
+    <!-- 
+    <script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'GA_MEASUREMENT_ID');
+    </script> 
+    -->
+
+    <style>
+        /* Inter 폰트 CDN */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        
+        /* [업데이트] 폰트 폴백(Fallback) 시스템 적용 */
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+        }
+
+        /* 프린트 시 스타일 최적화 */
+        @media print {
+            /* 불필요한 UI 숨기기 */
+            #selection-container, #cta-container, #print-container, #comparison-container {
+                display: none;
+            }
+            body {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            /* 카드 간 여백 추가하여 가독성 확보 */
+            .printable-card {
+                margin-bottom: 20px !important;
+                page-break-inside: avoid; /* 카드가 페이지 중간에 잘리지 않도록 설정 */
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+
+    <div class="container mx-auto max-w-3xl p-4 sm:p-8">
+        
+        <!-- 옵션 선택 버튼 -->
+        <div id="selection-container" class="mb-8 p-4 bg-white rounded-xl shadow-sm border border-gray-200">
+            <h2 class="text-lg font-semibold text-center mb-4 text-gray-700">리포트 방식 선택</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <button onclick="renderReport('A')" class="option-button w-full p-3 font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition" aria-label="안정형 대출 방식 선택">
+                    A 방식: 안정형
+                </button>
+                <button onclick="renderReport('B')" class="option-button w-full p-3 font-semibold text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 transition" aria-label="균형형 대출 방식 선택">
+                    B 방식: 균형형
+                </button>
+                <button onclick="renderReport('C')" class="option-button w-full p-3 font-semibold text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 transition" aria-label="공격형 대출 방식 선택">
+                    C 방식: 공격형
+                </button>
+            </div>
+        </div>
+
+        <!-- 리포트가 표시될 영역 -->
+        <div id="report-content" class="space-y-6">
+            <!-- 1. 상단 제목 + 부제목 -->
+            <div class="text-center printable-card">
+                <h1 id="report-title" class="text-3xl sm:text-4xl font-extrabold text-gray-800"></h1>
+                <p id="report-subtitle" class="mt-2 text-md text-gray-500"></p>
+            </div>
+
+            <!-- 2. 주요 수치 정보 카드 -->
+            <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm printable-card">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
+                    <div class="metric-item">
+                        <p class="text-sm text-gray-500">예상 <strong class="text-gray-700">금리</strong></p>
+                        <p id="metric-interest-rate" class="text-2xl font-bold"></p>
+                    </div>
+                    <div class="metric-item">
+                        <p class="text-sm text-gray-500">최대 <strong class="text-gray-700">한도</strong></p>
+                        <p id="metric-limit" class="text-2xl font-bold"></p>
+                    </div>
+                    <div class="metric-item col-span-1 sm:col-span-1">
+                        <p class="text-sm text-gray-500">월 상환액</p>
+                        <p id="metric-monthly-payment" class="text-2xl font-bold text-gray-800"></p>
+                    </div>
+                </div>
+                <div class="mt-6 text-center border-t pt-4">
+                    <button onclick="toggleTotalInterest()" class="text-xs text-gray-500 hover:underline focus:outline-none" aria-label="상세 정보 보기/숨기기">
+                        예상 총 이자 등 상세 정보 보기
+                    </button>
+                    <div id="metric-total-interest-container" class="hidden mt-2">
+                         <p class="text-sm text-gray-500">예상 총 <strong class="text-gray-700">이자</strong></p>
+                         <p id="metric-total-interest" class="text-lg font-bold text-gray-800"></p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 3. 방식 설명 -->
+            <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4 printable-card">
+                <div>
+                    <h3 class="text-lg font-bold text-gray-800 mb-2">대출 방식 특징</h3>
+                    <p id="desc-features" class="text-gray-600 leading-relaxed"></p>
+                </div>
+                <div class="border-t border-gray-100 pt-4">
+                    <h3 class="text-lg font-bold text-gray-800 mb-2">추천 대상</h3>
+                    <p id="desc-recommended-for" class="text-gray-600 leading-relaxed"></p>
+                </div>
+            </div>
+
+            <!-- 4. 구조 비교 카드 -->
+            <div id="comparison-container" class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">다른 대출 방식과 한눈에 비교하기</h3>
+                <table class="w-full text-sm text-left text-gray-500">
+                    <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3">구분</th>
+                            <th scope="col" class="px-6 py-3">예상 금리</th>
+                            <th scope="col" class="px-6 py-3">최대 한도</th>
+                        </tr>
+                    </thead>
+                    <tbody id="comparison-body">
+                        <!-- JavaScript로 내용이 채워집니다. -->
+                    </tbody>
+                </table>
+            </div>
+
+
+            <!-- 5. CTA 버튼 -->
+            <div id="cta-container" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <a href="https://fincettereport.kr/edit" target="_blank" class="block w-full p-4 font-semibold text-gray-700 text-center bg-gray-200 rounded-lg hover:bg-gray-300 transition underline" aria-label="내 정보 다시 입력하기 페이지로 이동">
+                    내 정보 다시 입력하기
+                </a>
+                <a href="https://fincettereport.kr/choose" target="_blank" class="block w-full p-4 font-semibold text-gray-700 text-center bg-gray-200 rounded-lg hover:bg-gray-300 transition underline" aria-label="다른 대출 방식 보기 페이지로 이동">
+                    다른 방식 보기
+                </a>
+                <a href="https://fincettereport.kr/consult" target="_blank" class="block w-full p-4 font-bold text-white text-center bg-blue-600 rounded-lg hover:bg-blue-700 transition underline" aria-label="전문가 상담 신청 페이지로 이동">
+                    전문가 상담 신청
+                </a>
+            </div>
+
+            <!-- 6. PDF 저장 버튼 -->
+            <div id="print-container" class="text-center pt-4">
+                <button onclick="downloadPDF()" title="PDF 저장" class="px-6 py-2 text-sm text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" aria-label="리포트 PDF로 저장하기">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    </svg>
+                    리포트 저장 (PDF)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 데이터 객체
+        const reportData = {
+            "A": {
+                "title": "A안 - 초기 안정 고정금리 설계",
+                "subtitle": "처음부터 안정적인 고정금리로, 예측 가능한 내 집 플랜",
+                "metrics": {
+                    "interestRate": "4.2%",
+                    "limit": "4억 8,000만 원",
+                    "monthlyPayment": "195만 원",
+                    "totalInterest": "2억 1,200만 원",
+                    "rateValue": 4.2,
+                    "limitValue": 48000
+                },
+                "description": {
+                    "features": "초기 5-10년간 고정금리로 시작해 안정적인 상환 계획을 세울 수 있습니다. 금리 변동 걱정 없이 장기 계획을 세우고 싶은 분들께 딱 맞는 설계예요.",
+                    "recommendedFor": "금리 변동이 불안한 분, 초기 몇 년간 안정적인 상환 계획을 원하시는 분"
+                }
+            },
+            "B": {
+                "title": "B안 - 혼합금리 균형형 대출 제안서",
+                "subtitle": "초기에는 낮은 고정금리로 시작하여, 특정 기간 후 변동금리로 전환되는 합리적인 대출 방식입니다.",
+                "metrics": {
+                    "interestRate": "초기 3.8% (5년)",
+                    "limit": "5억 1,000만 원",
+                    "monthlyPayment": "초기 188만 원",
+                    "totalInterest": "변동 (예상 1.9억)",
+                    "rateValue": 3.8,
+                    "limitValue": 51000
+                },
+                "description": {
+                    "features": "초기 3~5년간 고정금리가 적용되어 안정성을 확보하고, 이후 변동금리로 전환되어 금리 하락기의 혜택을 누릴 수 있습니다.",
+                    "recommendedFor": "단기적인 안정성과 장기적인 유연성을 모두 원하는 분, 향후 소득 증가가 예상되는 사회초년생에게 추천합니다."
+                }
+            },
+            "C": {
+                "title": "C안 - 변동금리 공격형 대출 제안서",
+                "subtitle": "금리 하락기에 이자 부담을 최소화하여, 가장 공격적으로 자산을 운용할 수 있는 대출 방식입니다.",
+                "metrics": {
+                    "interestRate": "3.5% ~",
+                    "limit": "5억 2,500만 원",
+                    "monthlyPayment": "변동 (현재 181만 원)",
+                    "totalInterest": "변동 (예상 1.7억)",
+                    "rateValue": 3.5,
+                    "limitValue": 52500
+                },
+                "description": {
+                    "features": "시장 기준금리에 연동하여 대출 금리가 주기적으로 변경됩니다. 금리 하락 시 상환 부담이 줄어들지만, 상승 시에는 부담이 커질 수 있습니다.",
+                    "recommendedFor": "금리 변동 리스크를 감수할 수 있고, 향후 금리 하락을 예상하는 투자자, 단기 상환 계획을 가진 분에게 적합합니다."
+                }
+            }
+        };
+
+        // DOM 요소 캐싱
+        const elements = {
+            title: document.getElementById('report-title'),
+            subtitle: document.getElementById('report-subtitle'),
+            interestRate: document.getElementById('metric-interest-rate'),
+            limit: document.getElementById('metric-limit'),
+            monthlyPayment: document.getElementById('metric-monthly-payment'),
+            totalInterest: document.getElementById('metric-total-interest'),
+            totalInterestContainer: document.getElementById('metric-total-interest-container'),
+            features: document.getElementById('desc-features'),
+            recommendedFor: document.getElementById('desc-recommended-for'),
+            optionButtons: document.querySelectorAll('.option-button'),
+            comparisonBody: document.getElementById('comparison-body')
+        };
+
+        // 총 이자 정보 토글 함수
+        function toggleTotalInterest() {
+            elements.totalInterestContainer.classList.toggle('hidden');
+        }
+
+        // PDF 다운로드 함수
+        function downloadPDF() {
+            const element = document.getElementById('report-content');
+            const currentTitle = document.title;
+            const opt = {
+                margin:       0.5,
+                filename:     ${currentTitle}.pdf,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true },
+                jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+            };
+            document.getElementById('selection-container').style.display = 'none';
+            document.getElementById('cta-container').style.display = 'none';
+            document.getElementById('print-container').style.display = 'none';
+            document.getElementById('comparison-container').style.display = 'none';
+
+            html2pdf().set(opt).from(element).save().then(() => {
+                document.getElementById('selection-container').style.display = 'block';
+                document.getElementById('cta-container').style.display = 'grid';
+                document.getElementById('print-container').style.display = 'block';
+                document.getElementById('comparison-container').style.display = 'block';
+            });
+        }
+
+        // 조건 기반 하이라이트 적용 함수
+        function applyHighlighting(data) {
+            elements.interestRate.classList.remove('text-blue-600', 'text-gray-800');
+            if (data.metrics.rateValue < 4.0) {
+                elements.interestRate.classList.add('text-blue-600');
+            } else {
+                elements.interestRate.classList.add('text-gray-800');
+            }
+
+            elements.limit.classList.remove('text-green-600', 'text-gray-800');
+            if (data.metrics.limitValue >= 50000) {
+                elements.limit.classList.add('text-green-600');
+            } else {
+                elements.limit.classList.add('text-gray-800');
+            }
+        }
+
+        // 구조 비교 카드 렌더링 함수
+        function renderComparison(currentOption) {
+            elements.comparisonBody.innerHTML = ''; 
+            const options = ['A', 'B', 'C'];
+            
+            options.forEach(option => {
+                const data = reportData[option];
+                const isCurrent = option === currentOption;
+                
+                const row = document.createElement('tr');
+                row.className = isCurrent 
+                    ? 'bg-blue-50 border-b font-bold' 
+                    : 'bg-white border-b hover:bg-gray-50';
+                
+                const simpleTitle = data.title.split(' - ')[0] + ' - ' + data.title.split(' ')[1];
+                
+                row.innerHTML = 
+                    <td class="px-6 py-4">${simpleTitle} ${isCurrent ? '(현재 선택)' : ''}</td>
+                    <td class="px-6 py-4">${data.metrics.interestRate}</td>
+                    <td class="px-6 py-4">${data.metrics.limit}</td>
+                ;
+                elements.comparisonBody.appendChild(row);
+            });
+        }
+
+        // 메인 리포트 렌더링 함수
+        function renderReport(option) {
+            const data = reportData[option];
+            if (!data) return;
+
+            document.title = ${data.title} - 핀셋리포트;
+
+            elements.title.textContent = data.title;
+            elements.subtitle.textContent = data.subtitle;
+            elements.interestRate.textContent = data.metrics.interestRate;
+            elements.limit.textContent = data.metrics.limit;
+            elements.monthlyPayment.textContent = data.metrics.monthlyPayment;
+            elements.totalInterest.textContent = data.metrics.totalInterest;
+            
+            elements.optionButtons.forEach(button => {
+                if (button.textContent.includes(option)) {
+                    button.classList.remove('bg-gray-200', 'text-gray-700', 'hover:bg-gray-300');
+                    button.classList.add('bg-blue-600', 'text-white', 'hover:bg-blue-700');
+                } else {
+                    button.classList.remove('bg-blue-600', 'text-white', 'hover:bg-blue-700');
+                    button.classList.add('bg-gray-200', 'text-gray-700', 'hover:bg-gray-300');
+                }
+            });
+
+            applyHighlighting(data);
+            renderComparison(option);
+            elements.totalInterestContainer.classList.add('hidden');
+        }
+
+        window.onload = () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const option = urlParams.get('option') || 'A';
+            renderReport(option);
+        };
+    </script>
+
+</body>
 </html>
+
+
